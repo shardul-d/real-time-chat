@@ -1,14 +1,11 @@
 from sqlmodel import SQLModel, create_engine
 from sqlalchemy import Engine
 from src import models # pyright: ignore[reportUnusedImport]
-import os
+from Backend.src.core.config import config
 
-BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH: str = os.path.join(BASE_DIR, "chatapp.db")
-DATABASE_URL: str = f"sqlite:///{DB_PATH}"
-  
+
 engine: Engine = create_engine(
-  DATABASE_URL, 
+  url=config.DATABASE_URL,
   connect_args={"check_same_thread": False},
   echo=True
 )
