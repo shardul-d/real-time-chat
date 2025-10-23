@@ -33,7 +33,7 @@ def create_jwt(user_id: int) -> str:
     return jwt.encode(payload, config.JWT_SECRET, config.JWT_ALGORITHM)  # pyright: ignore[reportUnknownMemberType]
 
 
-def get_user_id(req: Request) -> int | None:
+def validate_jwt_and_get_user_id(req: Request) -> int:
     token: str | None = req.cookies.get("access_token")
 
     if not token:
@@ -45,13 +45,13 @@ def get_user_id(req: Request) -> int | None:
     try:
         payload = jwt.decode(token, config.JWT_SECRET, config.JWT_ALGORITHM)  # pyright: ignore[reportAny, reportUnknownMemberType]
 
-        user_id = payload.get("sub") #pyright: ignore[reportAny]
-        
+        user_id = payload.get("sub")  # pyright: ignore[reportAny]
+
         if user_id is None:
             raise InvalidTokenError("Token payload is missing 'sub'.")
-        
-        return int(user_id) #pyright: ignore[reportAny]
-        
+
+        return int(user_id)  # pyright: ignore[reportAny]
+
     except InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -10,7 +10,7 @@ from src.db import engine
 from src.models import User
 from sqlmodel import Session, select
 
-router: APIRouter = APIRouter()
+router: APIRouter = APIRouter(tags=["Authentication"])
 
 
 class Credentials(BaseModel):
