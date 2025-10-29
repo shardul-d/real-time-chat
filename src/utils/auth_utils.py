@@ -3,9 +3,7 @@ from fastapi import HTTPException, Request, Response, status
 import jwt
 from datetime import datetime, timezone, timedelta
 from jwt.exceptions import InvalidTokenError
-from sqlmodel import Session, select
 from src.core.config import config
-from src.models import User
 
 
 def toUtf8(string: str) -> bytes:
@@ -20,20 +18,15 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(toUtf8(password), bcrypt.gensalt(12)).decode("utf-8")
 
 
-def get_user_if_exists(db: Session, username: str) -> User | None:
-    statement = select(User).where(User.username == username)
-    return db.exec(statement).first()
-
-
-def create_jwt(user_id: int) -> str:
+def create_jwt(username: str) -> str:
     expiry: datetime = datetime.now(timezone.utc) + timedelta(
         hours=config.JWT_EXPIRY_IN_HOURS
     )
-    payload: dict[str, int | datetime] = {"sub": user_id, "exp": expiry}
+    payload: dict[str, str | datetime] = {"sub": username, "exp": expiry}
     return jwt.encode(payload, config.JWT_SECRET, config.JWT_ALGORITHM)  # pyright: ignore[reportUnknownMemberType]
 
 
-def validate_jwt_and_get_user_id(req: Request) -> int:
+def validate_jwt(req: Request) -> bool:
     token: str | None = req.cookies.get("access_token")
 
     if not token:
@@ -44,13 +37,12 @@ def validate_jwt_and_get_user_id(req: Request) -> int:
         )
     try:
         payload = jwt.decode(token, config.JWT_SECRET, config.JWT_ALGORITHM)  # pyright: ignore[reportAny, reportUnknownMemberType]
+        username = payload.get("sub")  # pyright: ignore[reportAny]
 
-        user_id = payload.get("sub")  # pyright: ignore[reportAny]
-
-        if user_id is None:
+        if username is None:
             raise InvalidTokenError("Token payload is missing 'sub'.")
 
-        return int(user_id)  # pyright: ignore[reportAny]
+        return True
 
     except InvalidTokenError:
         raise HTTPException(
@@ -66,6 +58,6 @@ def validate_jwt_and_get_user_id(req: Request) -> int:
         )
 
 
-def set_auth_cookie(user_id: int, response: Response) -> None:
-    access_token: str = create_jwt(user_id)
+def set_auth_cookie(username: str, response: Response) -> None:
+    access_token: str = create_jwt(username)
     response.set_cookie("access_token", access_token, httponly=True, samesite="lax")

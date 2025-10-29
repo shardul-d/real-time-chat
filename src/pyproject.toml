@@ -1,5 +1,5 @@
 [project]
-name = "backend"
+name = "chat-app"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -19,3 +19,4 @@ dependencies = [
 dev = [
     "basedpyright>=1.32.0",
 ]
+
