@@ -1,7 +1,10 @@
 from typing import Annotated
-from fastapi import Depends
-from sqlmodel import Session
-from src.utils.auth_utils import validate_jwt
 
-AuthenticatedUsername = Annotated[str, Depends(validate_jwt)]
-db = Annotated[Session, Depends()]
+from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from db import get_db_session
+from utils.auth_utils import authenticate_request
+
+AuthenticatedUsername = Annotated[str, Depends(authenticate_request)]
+DBSessionDep = Annotated[AsyncSession, Depends(get_db_session)]

@@ -1,9 +1,10 @@
+from typing import Any
 import bcrypt
 from fastapi import HTTPException, Request, Response, status
 import jwt
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from jwt.exceptions import InvalidTokenError
-from src.core.config import config
+from core.config import config
 
 
 def toUtf8(string: str) -> bytes:
@@ -19,30 +20,31 @@ def hash_password(password: str) -> str:
 
 
 def create_jwt(username: str) -> str:
-    expiry: datetime = datetime.now(timezone.utc) + timedelta(
-        hours=config.JWT_EXPIRY_IN_HOURS
-    )
+    expiry: datetime = datetime.now(UTC) + timedelta(hours=config.JWT_EXPIRY_IN_HOURS)
     payload: dict[str, str | datetime] = {"sub": username, "exp": expiry}
     return jwt.encode(payload, config.JWT_SECRET, config.JWT_ALGORITHM)  # pyright: ignore[reportUnknownMemberType]
 
 
-def validate_jwt(req: Request) -> bool:
+def authenticate_request(req: Request) -> str:
     token: str | None = req.cookies.get("access_token")
-
+    print(f"Received token: {token}")
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated: Missing access token.",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    return validate_jwt(token)
+
+def validate_jwt(token: str) -> str:
     try:
         payload = jwt.decode(token, config.JWT_SECRET, config.JWT_ALGORITHM)  # pyright: ignore[reportAny, reportUnknownMemberType]
         username = payload.get("sub")  # pyright: ignore[reportAny]
 
-        if username is None:
+        if type(username) is not str:  # pyright: ignore[reportAny]
             raise InvalidTokenError("Token payload is missing 'sub'.")
 
-        return True
+        return username
 
     except InvalidTokenError:
         raise HTTPException(
@@ -57,7 +59,19 @@ def validate_jwt(req: Request) -> bool:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+def cookie_parser(environ: dict[str, Any]) -> dict[str, str]:
+    headers = environ.get("asgi.scope", {}).get("headers", [])
+    cookies: dict[str, str] = {}
+    for k, v in headers:
+        if k == b"cookie":
+            cookie_str = v.decode()
+            for part in cookie_str.split("; "):
+                if "=" in part:
+                    name, val = part.split("=", 1)
+                    cookies[name] = val
+                    
+    return cookies
 
 def set_auth_cookie(username: str, response: Response) -> None:
     access_token: str = create_jwt(username)
-    response.set_cookie("access_token", access_token, httponly=True, samesite="lax")
+    response.set_cookie("access_token", access_token, httponly=False, samesite="lax")

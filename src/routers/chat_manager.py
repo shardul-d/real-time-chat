@@ -1,32 +1,55 @@
+from fastapi import APIRouter, Depends, HTTPException, status
 from schema_models import User, Chat
-from src.dependencies import AuthenticatedUsername
-from fastapi import APIRouter, Depends
-from repositories import Repository, get_repo
+from dependencies import AuthenticatedUsername
+from repository import Repository, get_repo
+from schemas.chat import ChatCreateResponse, ChatCreateRequest
 
-router: APIRouter = APIRouter(tags=["Chat Management"])
+router = APIRouter(tags=["Chat Management"])
 
-
-@router.post(path="/chats/create_chat")
+@router.get("/chats", status_code=status.HTTP_200_OK)
+async def chats(username: AuthenticatedUsername, repo: Repository = Depends(get_repo)):
+    pass
+@router.post(
+    "/chats/create_chat",
+    response_model=ChatCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_chat(
     username: AuthenticatedUsername,
-    chat_name: str,
+    payload: ChatCreateRequest,
     repo: Repository = Depends(get_repo),
 ):
-    user: User | None = repo.get_user(username)
+    """Create a new group chat and automatically add the creator as a member."""
+    print(f"Hit create chat: {username}")
+    user: User | None = await repo.get_user(username)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
 
-    assert user is not None
+    chat: Chat = await repo.create_chat(user, payload.name)
+    return chat  # ✅ FastAPI auto-serializes ORM → ChatRead
 
-    repo.create_chat(user, chat_name)
 
-
-@router.post(path="/chats/join_chat")
+@router.post(
+    "/chats/join_chat",
+    status_code=status.HTTP_200_OK,
+)
 async def join_chat(
-    username: AuthenticatedUsername, chat_id: int, repo: Repository = Depends(get_repo)
+    username: AuthenticatedUsername,
+    chat_id: int,
+    repo: Repository = Depends(get_repo),
 ):
-    user: User | None = repo.get_user(username)
-    chat: Chat | None = repo.get_chat(chat_id)
+    """Join an existing chat."""
+    user: User | None = await repo.get_user(username)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
 
-    assert user is not None
-    assert chat is not None
+    chat: Chat | None = await repo.get_chat(chat_id)
+    if chat is None:
+        raise HTTPException(status_code=404, detail="Chat not found")
 
-    repo.join_chat(user, chat)
+    could_join: bool = await repo.join_chat(user, chat)
+
+    if not could_join:
+        raise HTTPException(status_code=409, detail="User already in chat.")
+
+    return {"detail": f"{username} joined chat {chat.name or chat.id}"}
